@@ -1,95 +1,70 @@
 #!/bin/bash
 
-# Check for root privileges
+# Check if the script is being run as root
 if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root or with sudo."
     exit 1
 fi
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
+# Colors for output
 CYAN='\033[0;36m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
-
-# ASCII Art
-ascii_art="
-${CYAN}  
-██       ███████  ██  ███████ ██    ██ ███████ ██████       ██████  ██       █████   ██   ██ ███████ ███████ 
-██       ██       ██  ██      ██    ██ ██      ██   ██     ██       ██      ██   ██  ██  ██  ██      ██      
-██       █████    ██  ███████ ██    ██ █████   ██████      ██   ███ ██      ███████  █████   █████   ███████ 
-██       ██       ██       ██ ██    ██ ██      ██   ██     ██    ██ ██      ██   ██  ██  ██  ██           ██ 
-███████  ██       ██  ███████  ██████  ███████ ██   ██      ██████  ███████ ██   ██  ██   ██ ███████ ███████
-${NC}
-"
-
-echo -e "${CYAN}$ascii_art${NC}"
-echo -e "${GREEN}🚀 Starting LEISURE PLAYZ Pterodactyl Panel Installation...${NC}"
 
 # Function to display messages with colors
 echo_message() {
     echo -e "${CYAN}$1${NC}"
 }
 
-echo_message "💥 Do you want to install LEISURE PLAYZ Pterodactyl Panel? (yes/no) 🤔"
-read answer
+# Print starting message
+echo_message "🚀 Starting Panel Setup..."
 
-if [ "$answer" != "yes" ]; then
-    echo_message "❌ Installation aborted. 💀"
-    exit 0
+# Check if Docker is installed
+if ! command -v docker &> /dev/null; then
+    echo_message "${RED}❌ Docker is not installed. Please install Docker first.${NC}"
+    exit 1
 fi
 
-echo_message "⚙️ Installing Dependencies... 🚀"
+# Check if Docker Compose is installed
+if ! command -v docker-compose &> /dev/null; then
+    echo_message "${RED}❌ Docker Compose is not installed. Installing Docker Compose...${NC}"
+    sudo apt-get install -y docker-compose
+fi
 
-# Update package list and install dependencies
-apt update -y
-apt install -y docker-compose git ufw
+# Navigate to the panel directory (update with the correct path)
+cd /path/to/docker-pterodactyl-panel || { echo_message "${RED}❌ Failed to navigate to the panel directory.${NC}"; exit 1; }
 
-echo_message "✅ Installed Dependencies ✔️"
+# Pull latest Docker images and rebuild containers
+echo_message "⚙️ Pulling latest Docker images and rebuilding containers..."
+docker-compose pull
+docker-compose build
 
-echo_message "📂 Installing LEISURE PLAYZ Pterodactyl Panel... 📥"
-
-# Clone and set up Pterodactyl Docker
-git clone https://github.com/YoshiWalsh/docker-pterodactyl-panel
-cd docker-pterodactyl-panel || { echo_message "❌ Failed to change directory"; exit 1; }
-
-# Start the panel
+# Start Docker containers in detached mode
+echo_message "⚙️ Starting Docker containers..."
 docker-compose up -d
 
-echo_message "✅ LEISURE PLAYZ Pterodactyl Panel Installed ✔️"
-
-echo_message "🚀 Configuring Firewall & Ports... 🔥"
-
-# Allow required ports (Default: 80, 443 for Web Panel)
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw allow 2022/tcp  # Change if using a different SSH port
-ufw allow 8080/tcp  # Change if Pterodactyl runs on a different port
-
-# Enable firewall (If disabled)
-ufw --force enable
-
-echo_message "✅ Firewall & Port Configuration Applied ✔️"
-
-echo_message "🚀 Restarting Services... 🔄"
-
-# Restart Docker containers to apply changes
-docker-compose restart
-
-# Wait a few seconds
-sleep 5
-
-# Check running containers
+# Check Docker containers status
+echo_message "📦 Checking Docker containers status..."
 docker ps
 
-echo_message "✅ Services Restarted ✔️"
+# Check if the panel container is running and show any error messages
+panel_container_name="docker-pterodactyl-panel_php-fpm_1"
+if ! docker ps | grep -q "$panel_container_name"; then
+    echo_message "${RED}❌ The Pterodactyl Panel container is not running. Please check the logs for errors.${NC}"
+    docker logs "$panel_container_name"
+    exit 1
+fi
 
-echo_message "🚀 Creating Admin User for LEISURE PLAYZ Pterodactyl Panel... 🔥"
+# Check if the port is open (5080) and accessible
+echo_message "🔍 Checking if port 5080 is open..."
+if ! nc -zv 127.0.0.1 5080; then
+    echo_message "${RED}❌ Port 5080 is not accessible. Please check your firewall and port forwarding settings.${NC}"
+    exit 1
+fi
 
-# Execute user creation command
-docker exec -it docker-pterodactyl-panel_php-fpm_1 php artisan p:user:make
+# Display the access URL
+echo_message "🔗 You can access your panel at: http://<your_server_ip>:5080"
 
-echo_message "🎉 LEISURE PLAYZ Pterodactyl Panel Installed & Configured Successfully! 🌐"
-
-echo_message "🌎 Access the panel via your server's IP on port 80 or 443."
-echo_message "🔔 Subscribe to: https://youtube.com/@leisureplayz 💻💡"
+# Print a completion message
+echo_message "✅ Panel should now be up and running!"
